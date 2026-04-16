@@ -3,78 +3,60 @@ const DATA = {
     // ... all your Rotorua JSON goes here ...
 };
 
-export default async function handler(req, res) {
-  // 1. Only allow POST requests
+eexport default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { prompt, history } = req.body;
-  const API_KEY = process.env.GEMINI_API_KEY; // Make sure this matches your Vercel Settings!
+  const { prompt } = req.body;
+  const API_KEY = process.env.GEMINI_API_KEY;
 
-  // 2. Your Rotorua Data & System Instructions
-  const SYSTEM_INSTRUCTION = `You are a tourism data analyst chatbot for Rotorua's tourism organisation. Answer questions ONLY using the embedded datasets below. Never invent or estimate figures not in the data.  Keep the key insights with bullet points.  Do not show data in tables and columns.
+  const SYSTEM_INSTRUCTION = `You are a tourism data analyst for Rotorua. 
+  Answer questions ONLY using this data: ${JSON.stringify(DATA)}
 
+  ANSWERING RULES:
+  - Use ### for section headings.
+  - Use **bold** for key metrics.
+  - Use Bullet Points for insights.
+  - Use Markdown Tables ONLY for comparing different years or months.
+  - "Last month" = Feb 2026.
+  - End every answer with: 📌 Source: [Dataset Name]
+  - Be concise and business-friendly.`;
 
-DATA FORMAT:
-All months are YYYY-MM keys.
-• hotel_occupancy_pct          – hotel occupancy % (float). Source: Stats NZ ADP, Rotorua RTO, Feb 2022–Feb 2026
-• hotel_domestic_guest_nights  – monthly domestic guest nights. Same source & range.
-• hotel_intl_guest_nights      – monthly international guest nights. Same source & range.
-• hotel_total_guest_nights     – total guest nights (dom+intl). Same source & range.
-• hotel_guest_arrivals         – monthly guest arrivals. Same source & range.
-• hotel_capacity               – monthly stay unit capacity (room-nights available). Same source & range.
-• hotel_establishments         – number of accommodation establishments. Same source & range.
-• holiday_homes_occupancy_pct  – holiday home occupancy % (float). Source: Holiday Homes platform. Apr 2023–Mar 2026. FUTURE months = advance bookings made so far, not final actuals.
-• visitor_spend                – {spend_nzd, transactions}. Source: Marketview, Rotorua District, All Markets, All Industries. Jan 2024–Feb 2026.
-• visitor_flow_rotorua         – {day_dom, day_intl, night_dom, night_intl} = sum of monthly peak daily visitor volumes. Source: Vodafone Analytics, Rotorua only. Jan 2024–Mar 2026.
-
-ANSWERING RULES:
-- "Last month" = most recent month available in that dataset.
-- Format: numbers with commas (e.g. 191,600). Spend as $NZD.
-- Year-on-year = same calendar month, one year prior.
-- Holiday homes future months: flag as "forward booking" not final.
-- If data is missing for a period, say so. Never fill gaps.
-- End every answer with: 📌 Source: [dataset name(s) used]
-- Use ### for section headings, **bold** for key numbers.
-- Be concise and business-friendly.
-
-DATA:
-` + JSON.stringify(DATA);
-
-
-  // 3. Construct the Gemini Payload
   const payload = {
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: `${SYSTEM_INSTRUCTION}\n\nUser Question: ${prompt}` }]
-      }
-    ]
+    contents: [{
+      role: "user",
+      parts: [{ text: `${SYSTEM_INSTRUCTION}\n\nUser Question: ${prompt}` }]
+    }]
   };
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
+    // Handle non-200 responses before parsing JSON
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Google API Error:', errorText);
+        return res.status(response.status).json({ error: "Google API rejected the request." });
+    }
+
     const data = await response.json();
 
     if (data.error) {
-      console.error('Gemini Error:', data.error);
       return res.status(500).json({ error: data.error.message });
     }
 
-    // 4. Send the text back to your HTML
     const botReply = data.candidates[0].content.parts[0].text;
     return res.status(200).json({ 
       content: [{ text: botReply }] 
     });
 
   } catch (err) {
-    console.error('Server Error:', err);
-    return res.status(500).json({ error: "Internal Server Error" });
+    console.error('Server Crash:', err);
+    return res.status(500).json({ error: "The server encountered an error processing the data." });
   }
 }
