@@ -380,15 +380,15 @@ async function send(){
 
   // UI Updates
   const wb = document.getElementById('wb'); if(wb) wb.remove();
-  document.getElementById('sugsBlock').style.display='none';
+  const sugs = document.getElementById('sugsBlock'); if(sugs) sugs.style.display='none';
   input.value=''; busy = true;
 
   addMsg('user', esc(text));
   showTyping();
 
   try {
-    // This calls YOUR Netlify function instead of Anthropic directly
-    const res = await fetch('/api/claude-proxy', {
+    // 1. UPDATED PATH: Pointing to Vercel's /api folder
+    const res = await fetch('/api/claude-proxy', { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: text, history: history })
@@ -397,12 +397,21 @@ async function send(){
     const data = await res.json();
     hideTyping();
 
-    const reply = data.content?.[0]?.text || 'Error: No response';
-    history.push({role: 'assistant', content: reply});
-    addMsg('bot', md(reply));
+    if (data.error) {
+       addMsg('bot', `⚠️ Error: ${esc(data.error)}`);
+    } else {
+       const reply = data.content?.[0]?.text || 'No response';
+       
+       // 2. UPDATED HISTORY: Store both sides so the bot remembers the conversation
+       history.push({role: 'user', content: text});
+       history.push({role: 'assistant', content: reply});
+       
+       addMsg('bot', md(reply));
+    }
   } catch(err) {
     hideTyping();
     addMsg('bot', '⚠️ Connection error.');
+    console.error(err);
   }
   busy = false;
 }
