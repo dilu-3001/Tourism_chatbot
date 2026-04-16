@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   // ... (rest of your logic for SYSTEM_PROMPT and fetch) ...
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
         // ... your existing fetch code ...
     });
     const data = await response.json();
